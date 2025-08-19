@@ -4,3 +4,4 @@ langchain_openai
 pydantic
 pinecone
 python-dotenv
+pydantic
