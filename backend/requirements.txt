@@ -5,3 +5,13 @@ pydantic
 pinecone
 python-dotenv
 pydantic
+uvicorn
+streamlit 
+fastapi
+uvicorn
+SQLAlchemy>=2.0
+streamlit
+requests
+pydantic
+psycopg2-binary
+python-dotenv

@@ -1,41 +1,19 @@
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Annotated
-
-from fastapi import Depends, FastAPI, HTTPException, Query
-from sqlmodel import Field, Session, SQLModel, create_engine, select
-
-
-sqlite_file_name = "database.db"
-sqlite_url = f"sqlite:///{sqlite_file_name}"
-
-connect_args = {"check_same_thread": False}
-engine = create_engine(sqlite_url, connect_args=connect_args)
+from fastapi import FastAPI
+from app.db.session import create_db_and_tables
+from app.routers.auth import router as auth_router
+from app.routers.exercises import router as exercises_router
+from app.routers.workouts import router as workouts_router
+from app.routers.nutrition import router as nutrition_router
+from app.routers.progress import router as progress_router
+from app.routers.chat import router as chat_router
 
 
-
-def create_db_and_tables():
-    SQLModel.metadata.create_all(engine)
-
-
-def get_session():
-    with Session(engine) as session:
-        yield session
-
-
-SessionDep = Annotated[Session, Depends(get_session)]
-
-app = FastAPI()
-
-origins = [
-    "http://localhost.tiangolo.com",
-    "https://localhost.tiangolo.com",
-    "http://localhost",
-    "http://localhost:8080",
-]
+app = FastAPI(title="SmartFit API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -47,42 +25,14 @@ def on_startup():
     create_db_and_tables()
 
 
-@app.get("/")
-async def main():
-    return {"message": "Hello World"}
-
 @app.get("/health")
 def health_status():
-    return {"App is Working"}
+    return {"status": "ok"}
 
 
-
-
-
-
-
-
-
-
-@app.post('/auth/register')
-def register():
-    "User Registration"
-
-@app.post('/auth/login')
-def login():
-    "User login"
-
-
-@app.get('/auth/user{user_id}')
-def get_user():
-    "Get User Profile"
-
-
-@app.post('/chat/ask')
-def generate_answer():
-    "Send question, get rag-powered response"
-
-
-@app.get('/chat/history{user_id}')
-def get_chat_history():
-    "Get chat history of user"
+app.include_router(auth_router)
+app.include_router(exercises_router)
+app.include_router(workouts_router)
+app.include_router(nutrition_router)
+app.include_router(progress_router)
+app.include_router(chat_router)
