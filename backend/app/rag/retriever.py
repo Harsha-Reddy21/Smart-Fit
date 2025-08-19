@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 
-
+from langchain_openai import ChatOpenAI
 
 def get_embeddings(text: str):
     """Get embeddings for a text"""
@@ -39,7 +39,7 @@ def get_index(index_name=None):
     
     return pc.Index(index_name)
 
-def retrieve_similar_examples(query_vector: List[float], top_k: int = 1) -> List[Dict[str, Any]]:
+def retrieve_similar_examples(query_vector: List[float], top_k: int = 10) -> List[Dict[str, Any]]:
     """Retrieve similar examples from Pinecone"""
     try:
         index = get_index()
@@ -47,8 +47,21 @@ def retrieve_similar_examples(query_vector: List[float], top_k: int = 1) -> List
         return results.matches
     except Exception:
 
-        logger.exception("retrieve_similar_examples failed")
         return []
+    
+
+def retrieve_context(query):
+    query_vector=get_embeddings(query)
+    rag_data=retrieve_similar_examples(query_vector)
+
+    llm=ChatOpenAI()
+    prompt=f"""You are smart fit analyst. Based on the data and prompt. Give the response accordingly. 
+    Here is the rag data {rag_data}. 
+    Here is the user query {query}
+
+    """
+    response=llm.invoke(prompt)
+    return response.content
 
 
 

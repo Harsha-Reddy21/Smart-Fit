@@ -17,7 +17,7 @@ def generate_answer(user_id: int, question: str, session: Session = Depends(get_
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     context_items = retrieve_context(question)
-    context_text = " \n".join(f"- {it['title']}: {it['text']}" for it in context_items)
+    
     profile_bits = []
     if user.goals:
         profile_bits.append(f"goal={user.goals}")
@@ -26,7 +26,7 @@ def generate_answer(user_id: int, question: str, session: Session = Depends(get_
     profile_summary = ", ".join(profile_bits) or "profile not set"
     answer = (
         f"Considering your {profile_summary}, here is guidance based on similar knowledge:\n"
-        f"{context_text}\n"
+        f"{context_items}\n"
         f"Apply gradually and track response (sets/reps/loads, energy, soreness)."
     )
     msg = ChatMessage(user_id=user_id, question=question, answer=answer)
