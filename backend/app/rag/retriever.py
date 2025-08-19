@@ -1,55 +1,55 @@
-from typing import List, Dict
+import os
+from pinecone import Pinecone
+from typing import List, Dict, Any
+from langchain_openai import OpenAIEmbeddings
+from dotenv import load_dotenv
+load_dotenv()
+os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 
 
-def _tokenize(text: str) -> List[str]:
-    return [t.lower() for t in text.split() if t.strip()]
 
+def get_embeddings(text: str):
+    """Get embeddings for a text"""
+    embeddings = OpenAIEmbeddings()
+    return embeddings.embed_query(text)
 
-def _bow_vector(tokens: List[str]):
-    counts = {}
-    for t in tokens:
-        counts[t] = counts.get(t, 0) + 1
-    norm = sum(v * v for v in counts.values()) ** 0.5 or 1.0
-    return {k: v / norm for k, v in counts.items()}
+def init_pinecone():
+    """Initialize Pinecone client"""
+    api_key = os.environ.get("PINECONE_API_KEY")
+    environment = os.environ.get("PINECONE_ENVIRONMENT")
+    
+    if not api_key or not environment:
+        raise ValueError("Pinecone API key and environment must be set")
+    
+    return Pinecone(api_key=api_key, environment=environment)
 
+def get_index(index_name=None):
+    """Get Pinecone index"""
+    pc = init_pinecone()
+    indexes = pc.list_indexes()
+    index_name = index_name or os.environ.get("PINECONE_INDEX")
+    
+    if not index_name:
+        raise ValueError("Pinecone index name must be provided")
+    
 
-def _cosine(a: dict, b: dict) -> float:
-    keys = a.keys() & b.keys()
-    return sum(a[k] * b[k] for k in keys)
+    index_names = [index["name"] for index in indexes]
+    if index_name not in index_names:
+        raise ValueError(f"Index '{index_name}' not found in Pinecone. Available indexes: {index_names}")
+    
+    return pc.Index(index_name)
 
+def retrieve_similar_examples(query_vector: List[float], top_k: int = 1) -> List[Dict[str, Any]]:
+    """Retrieve similar examples from Pinecone"""
+    try:
+        index = get_index()
+        results = index.query(vector=query_vector, top_k=top_k, include_metadata=True)
+        return results.matches
+    except Exception:
 
-KB_ITEMS: List[Dict[str, str]] = [
-    {
-        "title": "Squat",
-        "text": "The squat targets quads, glutes, and core. Keep chest up, push hips back, and track knees over toes.",
-    },
-    {
-        "title": "Bench Press",
-        "text": "Bench press works chest, triceps, and shoulders. Maintain scapular retraction and full foot contact.",
-    },
-    {
-        "title": "Protein Intake",
-        "text": "Aim for 1.6-2.2 g/kg/day of protein for muscle gain. Distribute across 3-4 meals with 20-40g each.",
-    },
-    {
-        "title": "Recovery",
-        "text": "Sleep 7-9 hours and manage stress. Incorporate deload weeks and light activity for recovery.",
-    },
-    {
-        "title": "Injury Prevention",
-        "text": "Warm up 5-10 minutes, use proper technique, and progress loads gradually to avoid injuries.",
-    },
-]
+        logger.exception("retrieve_similar_examples failed")
+        return []
 
-KB_VECTORS = [_bow_vector(_tokenize(item["text"])) for item in KB_ITEMS]
-
-
-def retrieve_context(query: str, k: int = 3) -> List[dict]:
-    qv = _bow_vector(_tokenize(query))
-    scored = [(_cosine(qv, v), i) for i, v in enumerate(KB_VECTORS)]
-    scored.sort(reverse=True)
-    top = [KB_ITEMS[i] for _, i in scored[:k]]
-    return top
 
 
 

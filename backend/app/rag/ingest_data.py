@@ -1,6 +1,6 @@
 
 import argparse
-import json
+import csv
 import os
 from typing import Any, Dict, List
 
@@ -12,22 +12,58 @@ from retriever import get_index
 load_dotenv()
 
 
-def read_json(input_path: str) -> List[Dict[str, Any]]:
+def read_csv(input_path: str) -> List[Dict[str, Any]]:
     if not os.path.exists(input_path):
-        raise FileNotFoundError(f"JSON file not found: {input_path}")
-    with open(input_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    if not isinstance(data, list):
-        raise ValueError("Input JSON must be a list of records")
-    return data
+        raise FileNotFoundError(f"CSV file not found: {input_path}")
+
+    records: List[Dict[str, Any]] = []
+    with open(input_path, "r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+
+        for i, row in enumerate(reader):
+            # Some CSVs may include an unnamed index column with an empty header
+            raw_id = (row.get("") or row.get(None) or "").strip() if isinstance(row, dict) else ""
+            rid = raw_id if raw_id else str(i + 1)
+
+            title = (row.get("Title") or "").strip()
+            desc = (row.get("Desc") or "").strip()
+
+            metadata: Dict[str, Any] = {
+                "title": title,
+                "description": desc,
+                "type": (row.get("Type") or "").strip(),
+                "body_part": (row.get("BodyPart") or "").strip(),
+                "equipment": (row.get("Equipment") or "").strip(),
+                "level": (row.get("Level") or "").strip(),
+                "rating": (row.get("Rating") or "").strip(),
+                "rating_desc": (row.get("RatingDesc") or "").strip(),
+            }
+
+            record: Dict[str, Any] = {
+                "id": rid,
+                "Title": title,
+                "Desc": desc,
+                "metadata": metadata,
+            }
+
+            records.append(record)
+
+    return records
 
 
 def build_text(record: Dict[str, Any]) -> str:
+    # Prefer CSV fields
+    title = (record.get("Title") or "").strip()
+    desc = (record.get("Desc") or "").strip()
+    if title or desc:
+        return f"{title}\n\n{desc}".strip()
+
+    # Fallback to legacy JSON fields if present
     prompt = record.get("prompt", "") or ""
     question = record.get("question", "") or ""
     if prompt and question and prompt != question:
         return f"{prompt}\n\n{question}"
-    return prompt or question
+    return (prompt or question).strip()
 
 
 def embed_texts(texts: List[str]) -> List[List[float]]:
@@ -41,19 +77,18 @@ def upsert_records(records: List[Dict[str, Any]], namespace: str | None = None, 
     texts: List[str] = [build_text(r) for r in records]
     vectors = embed_texts(texts)
 
-    # Prepare upsert payloads with rich metadata
     items: List[tuple[str, List[float], Dict[str, Any]]] = []
     for i, (record, vec, text) in enumerate(zip(records, vectors, texts)):
         rid = str(record.get("id") or i + 1)
         meta: Dict[str, Any] = {
             "text": text,
-            "question": record.get("question", "") or text,
+            "question": (record.get("Title") or record.get("question") or text) or "",
             "code": record.get("code", ""),
         }
-        # Merge additional metadata if present
+
         extra = record.get("metadata")
         if isinstance(extra, dict):
-            # Avoid overriding primary keys
+
             for k, v in extra.items():
                 if k not in meta:
                     meta[k] = v
@@ -94,11 +129,11 @@ def upsert_records(records: List[Dict[str, Any]], namespace: str | None = None, 
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Ingest JSON records into Pinecone with code metadata")
+    parser = argparse.ArgumentParser(description="Ingest CSV records into Pinecone with exercise metadata")
     parser.add_argument(
         "--input",
-        default=os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "mega"),
-        help="Path to input JSON file",
+        default=os.path.join(os.path.dirname(__file__), "megaGymDataset.csv"),
+        help="Path to input CSV file",
     )
     parser.add_argument(
         "--namespace",
@@ -107,7 +142,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    records = read_json(args.input)
+    records = read_csv(args.input)
     if not records:
         print("No records to ingest.")
         return

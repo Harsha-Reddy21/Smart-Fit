@@ -32,3 +32,4 @@ class ExerciseRead(BaseModel):
 
 
 
+
